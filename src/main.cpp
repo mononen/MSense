@@ -1,9 +1,11 @@
 #include <Arduino.h>
 
-void setup() {
-  // put your setup code here, to run once:
+#include "sense.h"
+
+extern "C" void setup() {
+  sense_init();
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+extern "C" void loop() {
+  sense_loop();
 }
