@@ -7,11 +7,15 @@ class Pulse{
     int computeTime();
     Pulse(unsigned long r); //constructor
 
+    unsigned long getRising();
+    unsigned long getFalling();
+    int getTime();
+
   private:
     unsigned long rising;
     mutable unsigned long falling;
 
-    mutable unsigned long time;
+    mutable int time;
 
 };
 
