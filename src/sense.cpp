@@ -27,8 +27,6 @@ void sense_init() {
   Serial.begin(115200);
   pinMode(inPin, INPUT);
 
-  // pinMode(LED_BUILTIN, OUTPUT);
-
   //hooks interrupt to pin
   attachInterrupt(digitalPinToInterrupt(inPin), pinInterrupt, CHANGE);
 }
@@ -41,12 +39,8 @@ void sense_loop() {
   while(pulseBuffer[pulseBufferIndex].rising != 0) {
     idx = pulseBufferIndex;
     p = pulseBuffer[idx]; //gets the first pulse in the queue data
-    // Serial.println("----Pulse found with rising: " + String(p.rising) + " falling: " + String(p.falling));
     Serial.println("idx is: " + String(idx) + " rising: " + String(p.rising) + " falling: " + String(p.falling));
-
     pulseBuffer[idx].rising = 0; //'erases' the pulse from the list
-    // p.log(); //prints the pulse to the serial monitor
   }
-  // Serial.println("N");
-  // digitalWrite(LED_BUILTIN, LOW);
+
 }
