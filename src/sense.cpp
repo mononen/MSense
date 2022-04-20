@@ -35,6 +35,7 @@ void pinInterrupt() {
     pulseBuffer[pulseBufferIndex].rising = micros();
   } else {
     pulseBuffer[pulseBufferIndex].falling = micros();
+    pulseBuffer[pulseBufferIndex].isRead = false;
     pulseBufferIndex++;
     if (pulseBufferIndex >= pulseBufferSize) {
       pulseBufferIndex = 0;
@@ -78,40 +79,32 @@ void boot_sequence() { //boot sequence lighting
   FastLED.show(); //show the leds
 }
 
-Pulse p;
+Pulse p, p2;
 int idx;
 bool lt50 = false; //flag for less than 50% duty cycle
 float mphtmp = 0; //temporary variable for mph
 
 void sense_loop() {
 
-  while(pulseBuffer[pulseBufferIndex].rising != 0) {
+  while(!pulseBuffer[pulseBufferIndex].isRead) {
     idx = pulseBufferIndex;
-    p = pulseBuffer[idx]; //gets the first pulse in the queue data
-    Serial.println("idx is: " + String(idx) + " rising: " + String(p.rising) + " falling: " + String(p.falling));
-    pulseBuffer[idx].rising = 0; //'erases' the pulse from the list
-    period = (p.falling - p.rising); //calculates the period of the pulse
-    dutyCycle = (p.rising / period) * 100; //calculates the duty cycle of the pulse
-    dutyCycleClean = cleanDutyCycle(dutyCycle); //cleaning the duty cycle so the leds are way smoother
-  
-  // Serial.println("duty cycle: " + String(dutyCycleClean));
-
-    if (dutyCycle > 50) { //logic for triggering mph calculations
-      if (lt50) {
-        lt50 = false;
-        // Serial.print("lt: " + String(lt) + " gt: " + String(gt));
-        // mphtmp = computeMPH(lt - gt);
-        if (mphtmp != -1) { //making sure the mph is valid
-          mph = mphtmp;
-        }
-      }
-      gt = p.falling;
+    p2 = pulseBuffer[idx]; //gets the first pulse in the queue data
+    pulseBuffer[idx].isRead = true; //'erases' the pulse from the list
+    if (idx == 0) {
+      p = pulseBuffer[pulseBufferSize - 1]; //gets the last pulse in the queue data
     } else {
-      lt = p.rising;
-      lt50 = true;
+      p = pulseBuffer[idx - 1]; //gets the previous pulse in the queue data
     }
+    onTime = p.falling - p.rising; //calculates the on time
+    offTime = p2.rising - p.falling; //calculates the off time
+    // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
+    period = (float)(offTime + onTime); //calculates the period
+    dutyCycle = (onTime / period) * 100; //calculates the duty cycle
+    // dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
+    // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
   }
-  renderLEDs(dutyCycleClean - 40, 10); //trimming the first 40% of the duty cycle
+  
+  renderLEDs(dutyCycle - 40, 10); //trimming the first 40% of the duty cycle
   FastLED.show();
 }
 

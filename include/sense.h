@@ -5,6 +5,7 @@ struct Pulse {
   unsigned long rising;
   unsigned long falling;
   int time;
+  bool isRead;
 };
 
 void sense_init();
