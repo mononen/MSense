@@ -9,7 +9,7 @@
 #define ledPin 4 //gpio pin 4, marked as D2 on the board
 #define numLeds 31 //number of leds in the strip
 CRGB leds[numLeds]; //array of leds
-#define BRIGHTNESS 180 //brightness of the leds
+#define BRIGHTNESS 50 //brightness of the leds
 #define hsvGreen 100 //green hsv color value
 #define hsvRed 0 //red hsv color value
 int dutyLeds = 0; //number of leds to light up for the duty cycle
@@ -47,6 +47,7 @@ void sense_init() {
   delay(3000);
 
   FastLED.addLeds<WS2812B, ledPin, GRB>(leds, numLeds); //add leds to the strip
+  FastLED.setMaxRefreshRate(0, false);
 
   boot_sequence();
 
@@ -84,27 +85,26 @@ int idx;
 bool lt50 = false; //flag for less than 50% duty cycle
 float mphtmp = 0; //temporary variable for mph
 
-void sense_loop() {
+unsigned long start, end;
 
-  while(!pulseBuffer[pulseBufferIndex].isRead) {
-    idx = pulseBufferIndex;
-    p2 = pulseBuffer[idx]; //gets the first pulse in the queue data
-    pulseBuffer[idx].isRead = true; //'erases' the pulse from the list
-    if (idx == 0) {
-      p = pulseBuffer[pulseBufferSize - 1]; //gets the last pulse in the queue data
-    } else {
-      p = pulseBuffer[idx - 1]; //gets the previous pulse in the queue data
-    }
-    onTime = p.falling - p.rising; //calculates the on time
-    offTime = p2.rising - p.falling; //calculates the off time
-    // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
-    period = (float)(offTime + onTime); //calculates the period
-    dutyCycle = (onTime / period) * 100; //calculates the duty cycle
-    // dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
-    // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
+void sense_loop() {
+  idx = pulseBufferIndex;
+  p2 = pulseBuffer[idx]; //gets the first pulse in the queue data
+  pulseBuffer[idx].isRead = true; //'erases' the pulse from the list
+  if (idx == 0) {
+    p = pulseBuffer[pulseBufferSize - 1]; //gets the last pulse in the queue data
+  } else {
+    p = pulseBuffer[idx - 1]; //gets the previous pulse in the queue data
   }
+  onTime = p.falling - p.rising; //calculates the on time
+  offTime = p2.rising - p.falling; //calculates the off time
+  // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
+  period = (float)(offTime + onTime); //calculates the period
+  dutyCycle = (onTime / period) * 100; //calculates the duty cycle
+  dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
+  // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
   
-  renderLEDs(dutyCycle - 40, 10); //trimming the first 40% of the duty cycle
+  renderLEDs(dutyCycleClean - 40, 10); //trimming the first 40% of the duty cycle
   FastLED.show();
 }
 
