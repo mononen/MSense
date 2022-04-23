@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <pulse.h>
-#include <queue>
 
 #include "sense.h"
 
@@ -15,7 +14,7 @@ Pulse ptmp = Pulse(0);
 void inputPinInterrupt() {
   if (digitalRead(inPin) == HIGH) {
     ptmp.setFallingEnd(micros()); //set falling end time for previous pulse
-    memcpy(&ptmp, &pulseArr[bufptr % buflen], sizeof(Pulse)); //copy previous pulse to temporary pulse
+    memcpy(&pulseArr[bufptr % buflen], &ptmp, sizeof(Pulse)); //copy temporary pulse to current pulse
     bufptr++; //increment buffer pointer
     ptmp = Pulse(micros()); //new pulse
   } else {
@@ -28,7 +27,7 @@ void sense_init() {
 
   ptmp = Pulse(100);
 
-  Serial.begin(115200);
+  Serial.begin(921600);
   pinMode(inPin, INPUT);
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -45,15 +44,6 @@ void sense_loop() {
   while (readPtr < bufptr) {
     p = pulseArr[readPtr % buflen];
     digitalWrite(LED_BUILTIN, HIGH);
-    Serial.print(p.getTime());
-    Serial.print("\t");
-    Serial.print(p.getRising());
-    Serial.print("\t");
-    Serial.print(p.getFalling());
-    Serial.print("\t");
-    Serial.print(p.getFallingEnd());
-    Serial.print("\n");
-    Serial.println(String(readPtr) + " " + String(bufptr));
     readPtr++;
   }
 
