@@ -4,25 +4,19 @@
 
 #include "sense.h"
 
-#define inPin 5 //gpio pin 5, marked as D1 on the board
+#define inPin 12 //gpio pin 5, marked as D1 on the board
 
-std::vector<Pulse> pulseList; 
+std::queue<Pulse> pulseQueue; 
 
-// void risingInterrupt() {
-//   pulseQueue.push(Pulse(micros()));
-// }
-
-// void fallingInterrupt() {
-//   pulseQueue.back().fallingTime(micros());
-// }
+Pulse ptmp = Pulse(0);
 
 void inputPinInterrupt() {
   if (digitalRead(inPin) == HIGH) {
-    pulseList.insert(pulseList.begin(), Pulse(micros()));
-    // pulseQueue.push(Pulse(micros()));
+    ptmp.setFallingEnd(micros()); //set falling end time for previous pulse
+    pulseQueue.push(ptmp); //push previous pulse to queue
+    ptmp = Pulse(micros()); //new pulse
   } else {
-    pulseList[pulseList.size() - 1].fallingTime(micros());
-    // pulseQueue.back().falling = micros();
+    ptmp.setFalling(micros()); //set falling time for current pulse
   }
 
 }
@@ -30,29 +24,34 @@ void inputPinInterrupt() {
 void sense_init() {
   delay(3000);
   //init the queue of pulses
-  pulseList = std::vector<Pulse>();
+  pulseQueue = std::queue<Pulse>();
+  ptmp = Pulse(100);
 
   Serial.begin(115200);
   pinMode(inPin, INPUT);
 
   pinMode(LED_BUILTIN, OUTPUT);
 
-  //hooks interrupts to pin
-  // attachInterrupt(digitalPinToInterrupt(inPin), risingInterrupt, RISING);
-  // attachInterrupt(digitalPinToInterrupt(inPin), fallingInterrupt, FALLING);
+  //hooks interrupt to pin
   attachInterrupt(digitalPinToInterrupt(inPin), inputPinInterrupt, CHANGE);
 }
 
 void sense_loop() {
 
-  while(!pulseList.empty()) {
-    Pulse p = pulseList[0]; //gets the first pulse in the queue data
-    p.computeTime(); //computes the time of the pulse
-    pulseList.erase(pulseList.begin()); //erases the pulse from the list
-    digitalWrite(LED_BUILTIN, HIGH);
-    Serial.println("Pulse found");
-    // p.log(); //prints the pulse to the serial monitor
+  while(!pulseQueue.empty()) {
+    Pulse p = pulseQueue.front();
+    pulseQueue.pop();
+    p.computeTime();
+    Serial.print("R: ");
+    Serial.print(p.getRising());
+    Serial.print(" F: ");
+    Serial.print(p.getFalling());
+    Serial.print(" FEnd: ");
+    Serial.print(p.getFallingEnd());
+    Serial.print(" T: ");
+    Serial.println(p.getTime());
   }
+
   Serial.println("Nothing in queue");
   digitalWrite(LED_BUILTIN, LOW);
 }

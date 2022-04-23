@@ -2,10 +2,10 @@
 
 #include "sense.h"
 
-extern "C" void setup() {
+void setup() {
   sense_init();
 }
 
-extern "C" void loop() {
+ void loop() {
   sense_loop();
 }
