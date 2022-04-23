@@ -4,8 +4,6 @@
 void sense_init();
 void sense_loop();
 
-// void IRAM_ATTR risingInterrupt();
-// void IRAM_ATTR fallingInterrupt();
 void IRAM_ATTR inputPinInterrupt();
 
 #endif // !SENSE_H
