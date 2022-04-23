@@ -1,12 +1,13 @@
 #include <Arduino.h>
 #include <FastLED.h>
+#include <pulse.h>
 
 #include "sense.h"
 
-#define inPin 5 //gpio pin 5, marked as D1 on the board
+#define inPin 12 //gpio pin 5, marked as D1 on the board
 
 //LED driver stuff
-#define ledPin 4 //gpio pin 4, marked as D2 on the board
+#define ledPin 14 //gpio pin 4, marked as D2 on the board
 #define numLeds 31 //number of leds in the strip
 CRGB leds[numLeds]; //array of leds
 #define BRIGHTNESS 50 //brightness of the leds
@@ -14,10 +15,7 @@ CRGB leds[numLeds]; //array of leds
 #define hsvRed 0 //red hsv color value
 int dutyLeds = 0; //number of leds to light up for the duty cycle
 
-//Queue of pulses
-#define pulseBufferSize 32
-Pulse pulseBuffer[pulseBufferSize]; //buffer for pulse data
-int pulseBufferIndex = 0; //index of the next pulse to be added to the buffer
+Queue<Pulse> pulseQueue; //queue of pulses
 
 //globals
 int onTime, offTime, dutyCycle, dutyCycleClean, mph;
@@ -30,16 +28,16 @@ unsigned long gt, lt; //timing for greater than and less than 50% duty cycle
 int buf[bufLen] = {0}; //buffer to write the rolling median to
 int bufIdx = 0; //index of the current element in the buffer
 
+Pulse * tmp; //temporary pulse struct
+
 void pinInterrupt() {
   if (digitalRead(inPin) == HIGH) { //investigate direct port read
-    pulseBuffer[pulseBufferIndex].rising = micros();
+    tmp.fallingEnd = micros();
+    pulseQueue.enqueue(tmp);
+    tmp.rising = micros();
   } else {
-    pulseBuffer[pulseBufferIndex].falling = micros();
-    pulseBuffer[pulseBufferIndex].isRead = false;
-    pulseBufferIndex++;
-    if (pulseBufferIndex >= pulseBufferSize) {
-      pulseBufferIndex = 0;
-    }
+    tmp.falling = micros();
+    pulseQueue.enqueue(tmp);
   }
 }
 
@@ -54,8 +52,28 @@ void sense_init() {
   Serial.begin(115200);
   pinMode(inPin, INPUT);
 
+  Serial.println("Sense booting...");
+
+  dutyCycleClean = 0;
+  dutyCycle = 0;
+  mph = 0;
+
+  // xTaskCreatePinnedToCore(
+  //   &renderLEDs,
+  //   "renderLEDs",
+  //   10000,
+  //   NULL,
+  //   1,
+  //   &renderLedTask,
+  //   0
+  // );
+
+  delay(500);
+
   //hooks interrupt to pin
   attachInterrupt(digitalPinToInterrupt(inPin), pinInterrupt, CHANGE);
+
+  Serial.println("Sense booted.");
 }
 
 
@@ -102,15 +120,16 @@ void sense_loop() {
   period = (float)(offTime + onTime); //calculates the period
   dutyCycle = (onTime / period) * 100; //calculates the duty cycle
   dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
-  // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
+  Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
+  Serial.print("loop running on core: ");
+  Serial.println(xPortGetCoreID());
   
-  renderLEDs(dutyCycleClean - 40, 10); //trimming the first 40% of the duty cycle
-  FastLED.show();
+  renderLEDs(); //trimming the first 40% of the duty cycle
 }
 
-//dutyCycle is the duty cycle in percent (40-100)
-void renderLEDs(int dutyCycle, int mph) { 
-  int dutyLeds = dutyCycle * numLeds / 100;
+
+void renderLEDs() { 
+  int dutyLeds = (dutyCycleClean - 40) * numLeds / 100;
 
   for (int i = 0; i < numLeds; i++) { //span all the LEDS for drawing the duty cycle
     if (i < dutyLeds) {
@@ -121,6 +140,9 @@ void renderLEDs(int dutyCycle, int mph) {
   }
   //draw the MPH
   leds[mph] = CHSV(0, 0, BRIGHTNESS); //make white
+  FastLED.show();
+  Serial.print("renderLEDS running on core: ");
+  Serial.println(xPortGetCoreID());
 }
 
 float mphbuf = 0.0; //buffer to store the mph
