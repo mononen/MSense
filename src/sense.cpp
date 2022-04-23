@@ -15,11 +15,10 @@ CRGB leds[numLeds]; //array of leds
 #define hsvRed 0 //red hsv color value
 int dutyLeds = 0; //number of leds to light up for the duty cycle
 
-Queue<Pulse> pulseQueue; //queue of pulses
-
 //globals
 int onTime, offTime, dutyCycle, dutyCycleClean, mph;
 float period;
+TaskHandle_t Task1;
 
 unsigned long gt, lt; //timing for greater than and less than 50% duty cycle
 
@@ -28,16 +27,19 @@ unsigned long gt, lt; //timing for greater than and less than 50% duty cycle
 int buf[bufLen] = {0}; //buffer to write the rolling median to
 int bufIdx = 0; //index of the current element in the buffer
 
-Pulse * tmp; //temporary pulse struct
+Pulse pulseArr [bufLen] = Pulse(0);
+int bufptr = 0;
+
+Pulse ptmp = Pulse(0);
 
 void pinInterrupt() {
-  if (digitalRead(inPin) == HIGH) { //investigate direct port read
-    tmp.fallingEnd = micros();
-    pulseQueue.enqueue(tmp);
-    tmp.rising = micros();
+  if (digitalRead(inPin) == HIGH) {
+    ptmp.setFallingEnd(micros()); //set falling end time for previous pulse
+    memcpy(&pulseArr[bufptr % bufLen], &ptmp, sizeof(Pulse)); //copy temporary pulse to current pulse
+    bufptr++; //increment buffer pointer
+    ptmp = Pulse(micros()); //new pulse
   } else {
-    tmp.falling = micros();
-    pulseQueue.enqueue(tmp);
+    ptmp.setFalling(micros()); //set falling time for current pulse
   }
 }
 
@@ -49,24 +51,22 @@ void sense_init() {
 
   boot_sequence();
 
-  Serial.begin(115200);
+  ptmp = Pulse(100);
+
+  Serial.begin(921600);
   pinMode(inPin, INPUT);
 
   Serial.println("Sense booting...");
 
-  dutyCycleClean = 0;
-  dutyCycle = 0;
-  mph = 0;
-
-  // xTaskCreatePinnedToCore(
-  //   &renderLEDs,
-  //   "renderLEDs",
-  //   10000,
-  //   NULL,
-  //   1,
-  //   &renderLedTask,
-  //   0
-  // );
+  xTaskCreatePinnedToCore(
+    taskCode, //task function
+    "renderLEDs", //task name
+    10000, //stack size
+    NULL, //parameters
+    1, //priority
+    &Task1, //task handle
+    0 //core
+  );
 
   delay(500);
 
@@ -98,33 +98,35 @@ void boot_sequence() { //boot sequence lighting
   FastLED.show(); //show the leds
 }
 
-Pulse p, p2;
-int idx;
 bool lt50 = false; //flag for less than 50% duty cycle
 float mphtmp = 0; //temporary variable for mph
 
-unsigned long start, end;
+int readPtr = 0;
+Pulse p = Pulse(0);
 
 void sense_loop() {
-  idx = pulseBufferIndex;
-  p2 = pulseBuffer[idx]; //gets the first pulse in the queue data
-  pulseBuffer[idx].isRead = true; //'erases' the pulse from the list
-  if (idx == 0) {
-    p = pulseBuffer[pulseBufferSize - 1]; //gets the last pulse in the queue data
-  } else {
-    p = pulseBuffer[idx - 1]; //gets the previous pulse in the queue data
+
+  while(readPtr < bufptr) {
+    p = pulseArr[readPtr % bufLen];
+    onTime = p.getFalling() - p.getRising();
+    offTime = p.getFallingEnd() - p.getFalling();
+    // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
+    period = (float)(offTime + onTime); //calculates the period
+    dutyCycle = (onTime / period) * 100; //calculates the duty cycle
+    dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
+    // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
+    // Serial.print("loop running on core: ");
+    // Serial.println(xPortGetCoreID());
   }
-  onTime = p.falling - p.rising; //calculates the on time
-  offTime = p2.rising - p.falling; //calculates the off time
-  // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
-  period = (float)(offTime + onTime); //calculates the period
-  dutyCycle = (onTime / period) * 100; //calculates the duty cycle
-  dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
-  Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
-  Serial.print("loop running on core: ");
-  Serial.println(xPortGetCoreID());
   
   renderLEDs(); //trimming the first 40% of the duty cycle
+}
+
+void taskCode( void * parameter ) {
+  while(1) {
+    renderLEDs();
+    vTaskDelay(1);
+  }
 }
 
 
@@ -141,8 +143,6 @@ void renderLEDs() {
   //draw the MPH
   leds[mph] = CHSV(0, 0, BRIGHTNESS); //make white
   FastLED.show();
-  Serial.print("renderLEDS running on core: ");
-  Serial.println(xPortGetCoreID());
 }
 
 float mphbuf = 0.0; //buffer to store the mph

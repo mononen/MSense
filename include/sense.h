@@ -1,12 +1,6 @@
 #ifndef SENSE_H
 #define SENSE_H
 
-struct Pulse {
-  unsigned long rising;
-  unsigned long falling;
-  unsigned long fallingEnd;
-};
-
 void sense_init();
 void sense_loop();
 
@@ -17,5 +11,7 @@ void renderLEDs();
 int computeMPH(unsigned long time);
 int cleanDutyCycle(int dutyCycle);
 int calcMax(int arr[], int size);
+
+void taskCode( void * parameter );
 
 #endif // !SENSE_H
