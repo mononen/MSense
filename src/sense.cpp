@@ -162,8 +162,9 @@ void renderLEDs() {
 float mphbuf = 0.0; //buffer to store the mph
 
 int computeMPH(unsigned long time) {
+  testing having this diasbled 
   mphbuf = (float)time * 2; //multiply by 2 to get the full cycle timing
-  mphbuf = (time / 1000000.0); //convert microseconds to seconds
+  mphbuf = (mphbuf / 1000000.0); //convert microseconds to seconds
   mphbuf = 1.0/mphbuf; //invert
   mphbuf = mphbuf / 15.0; //divide by pole count
   mphbuf = mphbuf * 60.0; //convert to minutes
