@@ -4,10 +4,11 @@
 
 #include "sense.h"
 
-#define inPin 12 //gpio pin 5, marked as D1 on the board
+#define inPin 25 //gpio pin 25, marked as D25 on the board
+#define vPin 34 //gpio pin 34, marked as D34 on the board; used for voltage readings on ADC1
 
 //LED driver stuff
-#define ledPin 14 //gpio pin 4, marked as D2 on the board
+#define ledPin 12 //gpio pin 4, marked as D2 on the board
 #define numLeds 31 //number of leds in the strip
 CRGB leds[numLeds]; //array of leds
 #define BRIGHTNESS 50 //brightness of the leds
@@ -49,7 +50,7 @@ void sense_init() {
   FastLED.addLeds<WS2812B, ledPin, GRB>(leds, numLeds); //add leds to the strip
   FastLED.setMaxRefreshRate(0, false);
 
-  boot_sequence();
+  // boot_sequence();
 
   ptmp = Pulse(100);
 
@@ -114,12 +115,25 @@ void sense_loop() {
     period = (float)(offTime + onTime); //calculates the period
     dutyCycle = (onTime / period) * 100; //calculates the duty cycle
     dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
-    // Serial.println(" onTime: " + String(onTime) + " offTime: " + String(offTime) + " dutyCycle: " + String(dutyCycle));
-    // Serial.print("loop running on core: ");
-    // Serial.println(xPortGetCoreID());
+    if (dutyCycle > 50) { //logic for triggering mph calculations
+      if (lt50) {
+        lt50 = false;
+        Serial.print("lt: " + String(lt) + " gt: " + String(gt));
+        mphtmp = computeMPH(lt - gt);
+        if (mphtmp != -1) { //making sure the mph is valid
+          mph = mphtmp;
+        }
+      }
+      gt = micros();
+    } else {
+      lt = micros();
+      lt50 = true;
+    }
+    leds[29] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
+    leds[30] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
   }
-  
-  renderLEDs(); //trimming the first 40% of the duty cycle
+  leds[30] = CHSV(0, 255, BRIGHTNESS); // make red
+  leds[29] = CHSV(0, 255, BRIGHTNESS); // make red
 }
 
 void taskCode( void * parameter ) {
@@ -133,7 +147,7 @@ void taskCode( void * parameter ) {
 void renderLEDs() { 
   int dutyLeds = (dutyCycleClean - 40) * numLeds / 100;
 
-  for (int i = 0; i < numLeds; i++) { //span all the LEDS for drawing the duty cycle
+  for (int i = 0; i < numLeds-2; i++) { //span all the LEDS for drawing the duty cycle
     if (i < dutyLeds) {
       leds[i] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
     } else {
