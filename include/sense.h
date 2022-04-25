@@ -13,5 +13,7 @@ int cleanDutyCycle(int dutyCycle);
 int calcMax(int arr[], int size);
 
 void taskCode( void * parameter );
+int computeVoltage(int v);
+void renderVoltage(int v);
 
 #endif // !SENSE_H

@@ -1,5 +1,7 @@
 #include <Arduino.h>
+#include <driver/adc.h>
 #include <FastLED.h>
+
 #include <pulse.h>
 
 #include "sense.h"
@@ -19,9 +21,11 @@ int dutyLeds = 0; //number of leds to light up for the duty cycle
 //globals
 int onTime, offTime, dutyCycle, dutyCycleClean, mph;
 float period;
+int adcValue;
 TaskHandle_t Task1;
 
 unsigned long gt, lt; //timing for greater than and less than 50% duty cycle
+
 
 //duty cycle buffer stuff
 #define bufLen 15 //length of the buffer
@@ -37,6 +41,9 @@ void pinInterrupt() {
   if (digitalRead(inPin) == HIGH) {
     ptmp.setFallingEnd(micros()); //set falling end time for previous pulse
     memcpy(&pulseArr[bufptr % bufLen], &ptmp, sizeof(Pulse)); //copy temporary pulse to current pulse
+    if (mph < 10) {
+      adcValue = adc1_get_raw(ADC1_CHANNEL_6); //get voltage reading
+    }
     bufptr++; //increment buffer pointer
     ptmp = Pulse(micros()); //new pulse
   } else {
@@ -111,14 +118,12 @@ void sense_loop() {
     p = pulseArr[readPtr % bufLen];
     onTime = p.getFalling() - p.getRising();
     offTime = p.getFallingEnd() - p.getFalling();
-    // Serial.print("offTime: " + String(offTime) + " p2rising " + String(p2.rising) + " p.falling " + String(p.falling));
     period = (float)(offTime + onTime); //calculates the period
     dutyCycle = (onTime / period) * 100; //calculates the duty cycle
     dutyCycleClean = cleanDutyCycle(dutyCycle); //cleans the duty cycle
     if (dutyCycle > 50) { //logic for triggering mph calculations
       if (lt50) {
         lt50 = false;
-        Serial.print("lt: " + String(lt) + " gt: " + String(gt));
         mphtmp = computeMPH(lt - gt);
         if (mphtmp != -1) { //making sure the mph is valid
           mph = mphtmp;
@@ -147,15 +152,23 @@ void taskCode( void * parameter ) {
 void renderLEDs() { 
   int dutyLeds = (dutyCycleClean - 40) * numLeds / 100;
 
-  for (int i = 0; i < numLeds-2; i++) { //span all the LEDS for drawing the duty cycle
-    if (i < dutyLeds) {
-      leds[i] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
-    } else {
-      leds[i] = CHSV(hsvGreen, 255, BRIGHTNESS); //draw background green
-    }
+  if (mph < 10)
+  {
+    renderVoltage(adcValue);
   }
-  //draw the MPH
-  leds[mph] = CHSV(0, 0, BRIGHTNESS); //make white
+  else
+  {
+    for (int i = 0; i < numLeds-2; i++) { //span all the LEDS for drawing the duty cycle
+      if (i < dutyLeds) {
+        leds[i] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
+      } else {
+        leds[i] = CHSV(hsvGreen, 255, BRIGHTNESS); //draw background green
+      }
+    }
+    //draw the MPH
+    leds[mph] = CHSV(0, 0, BRIGHTNESS); //make white
+  }
+
   FastLED.show();
 }
 
@@ -202,4 +215,29 @@ int cleanDutyCycle(int dutyCycle) {
     return 0;
   } 
   return max;
+}
+
+int computeVoltage(int v) {
+  float vtmp = (v * (0.0150)) + 1.657; //convert to battery voltage
+  int voltage = (int)(99.9 / (0.8 + pow(1.29, (54 - vtmp))) - 10); //convert to percentage
+  // Serial.println("v: " + String(v) + " vtmp: " + String(vtmp) + " percentage: " + String(voltage));
+  if (voltage > 100) {
+    voltage = 100;
+  } else if (voltage < 0) {
+    voltage = 0;
+  }
+  // Serial.println("Currently on core: " + String(xPortGetCoreID()));
+  return ((voltage) * numLeds / 100); //return # of leds to light up
+}
+
+void renderVoltage(int v) {
+  int voltage = computeVoltage(v);
+  for (int i = 0; i < numLeds; i++) {
+    if (i < voltage) {
+      leds[i] = CHSV(hsvRed, 255, BRIGHTNESS); // make red
+    } else {
+      leds[i] = CHSV(0, 0, 0); //draw background black
+    }
+  }
+  FastLED.show();
 }
